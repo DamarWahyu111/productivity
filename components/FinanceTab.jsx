@@ -129,7 +129,7 @@ export default function FinanceTab({ type }) {
   }
 
   const addMonthlyIncome = (amount) => {
-    const income = amount && amount.trim() !== "" ? Number.parseFloat(amount) : 1000
+    const income = amount && amount.trim() !== "" ? Number.parseFloat(amount) : 0
     const date = new Date()
     const monthKey = `monthlyIncome_${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, "0")}`
     localStorage.setItem(monthKey, JSON.stringify(income))
