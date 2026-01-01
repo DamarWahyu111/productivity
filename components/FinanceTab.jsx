@@ -228,9 +228,9 @@ export default function FinanceTab({ type }) {
           <div className="flex gap-2">
             <input
               type="number"
-              defaultValue={monthlyIncome === 1000 ? "" : monthlyIncome}
+              defaultValue={monthlyIncome === 0 ? "" : monthlyIncome}
               onBlur={(e) => addMonthlyIncome(e.target.value)}
-              placeholder="Kosongkan untuk reset ke 1.000"
+              placeholder="Kosongkan untuk reset ke 0"
               className="flex-1 px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 text-sm sm:text-base transition-all shadow-sm hover:shadow-md"
             />
           </div>
