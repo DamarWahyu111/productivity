@@ -1,127 +1,194 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase-client"
+import { useAuth } from "@/app/auth-context"
 import TodoForm from "./TodoForm"
 import TodoList from "./TodoList"
 
 export default function TodoTab({ type }) {
+  const { user } = useAuth()
+
   const [tasks, setTasks] = useState([])
   const [displayDate, setDisplayDate] = useState("")
 
   useEffect(() => {
-    loadTasks()
-    updateDisplayDate()
-  }, [type])
+    if (user) {
+      loadTasks()
+      updateDisplayDate()
+    }
+  }, [type, user])
 
-  const getTaskKey = () => {
-    const date = new Date()
-    let key = `todo_${type}`
+  // ================================
+  // GET DATE KEY FOR SCOPE
+  // ================================
+  const getDateForScope = () => {
+    const d = new Date()
 
     if (type === "daily") {
-      key += `_${date.toISOString().split("T")[0]}`
-    } else if (type === "weekly") {
-      const weekStart = new Date(date)
-      weekStart.setDate(date.getDate() - date.getDay())
-      key += `_${weekStart.toISOString().split("T")[0]}`
-    } else if (type === "monthly") {
-      key += `_${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, "0")}`
+      return d.toISOString().split("T")[0]
     }
 
-    return key
-  }
-
-  const updateDisplayDate = () => {
-    const date = new Date()
-    let display = ""
-
-    if (type === "daily") {
-      display = date.toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
-    } else if (type === "weekly") {
-      const weekStart = new Date(date)
-      weekStart.setDate(date.getDate() - date.getDay())
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      display = `${weekStart.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} - ${weekEnd.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`
+    if (type === "weekly") {
+      const start = new Date(d)
+      start.setDate(d.getDate() - d.getDay())
+      return start.toISOString().split("T")[0]
     }
-    // monthly doesn't need date display
 
-    setDisplayDate(display)
+    if (type === "monthly") {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+    }
   }
 
-  const loadTasks = () => {
-    const key = getTaskKey()
-    const saved = localStorage.getItem(key)
-    setTasks(saved ? JSON.parse(saved) : [])
+  // ================================
+  // LOAD TASKS FROM SUPABASE
+  // ================================
+  const loadTasks = async () => {
+    const scopeDate = getDateForScope()
+
+    const { data, error } = await supabase
+      .from("todo_items")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("scope", type)
+      .eq("date", scopeDate)
+      .order("created_at", { ascending: false })
+
+    if (!error) setTasks(data)
   }
 
-  const saveTasks = (newTasks) => {
-    const key = getTaskKey()
-    localStorage.setItem(key, JSON.stringify(newTasks))
-  }
+  // ================================
+  // ADD TASK
+  // ================================
+  const addTask = async (taskText) => {
+    const scopeDate = getDateForScope()
 
-  const addTask = (taskText) => {
-    const newTask = {
-      id: Date.now(),
-      text: taskText,
+    const { data, error } = await supabase.from("todo_items").insert({
+      user_id: user.id,
+      scope: type,
+      date: scopeDate,
+      task: taskText,
       completed: false,
-      createdAt: new Date().toISOString(),
+    })
+
+    loadTasks()
+  }
+
+  // ================================
+  // TOGGLE COMPLETE
+  // ================================
+  const toggleTask = async (id, current) => {
+    await supabase
+      .from("todo_items")
+      .update({ completed: !current })
+      .eq("id", id)
+
+    loadTasks()
+  }
+
+  // ================================
+  // DELETE TASK
+  // ================================
+  const deleteTask = async (id) => {
+    await supabase.from("todo_items").delete().eq("id", id)
+    loadTasks()
+  }
+
+  // CLEAR ALL
+  const clearAll = async () => {
+    if (confirm("Hapus semua tugas?")) {
+      const scopeDate = getDateForScope()
+
+      await supabase
+        .from("todo_items")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("scope", type)
+        .eq("date", scopeDate)
+
+      loadTasks()
     }
-    const newTasks = [...tasks, newTask]
-    setTasks(newTasks)
-    saveTasks(newTasks)
   }
 
-  const toggleTask = (id) => {
-    const newTasks = tasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task))
-    setTasks(newTasks)
-    saveTasks(newTasks)
-  }
+  // ================================
+  // DATE DISPLAY (UI SAJA)
+  // ================================
+  const updateDisplayDate = () => {
+    const d = new Date()
 
-  const deleteTask = (id) => {
-    const newTasks = tasks.filter((task) => task.id !== id)
-    setTasks(newTasks)
-    saveTasks(newTasks)
-  }
+    if (type === "daily") {
+      setDisplayDate(
+        d.toLocaleDateString("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      )
+    } else if (type === "weekly") {
+      const start = new Date(d)
+      start.setDate(d.getDate() - d.getDay())
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
 
-  const clearAll = () => {
-    if (confirm("Apakah Anda yakin ingin menghapus semua tugas?")) {
-      setTasks([])
-      saveTasks([])
+      setDisplayDate(
+        `${start.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+        })} - ${end.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })}`
+      )
+    } else {
+      setDisplayDate(
+        d.toLocaleDateString("id-ID", {
+          month: "long",
+          year: "numeric",
+        })
+      )
     }
   }
 
-  const completedCount = tasks.filter((t) => t.completed).length
+  // PROGRESS BAR
+  const completedCount = tasks.filter(t => t.completed).length
   const progressPercent = tasks.length ? (completedCount / tasks.length) * 100 : 0
 
   return (
     <div className="space-y-6">
-      {displayDate && <p className="text-sm font-semibold text-neutral-600">{displayDate}</p>}
+      {displayDate && (
+        <p className="text-sm font-semibold text-neutral-600">{displayDate}</p>
+      )}
 
-      {/* Progress Info */}
-      <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-        <p className="text-sm font-medium text-neutral-700">
-          Progres:{" "}
-          <span className="text-neutral-900 font-bold">
-            {completedCount}/{tasks.length}
-          </span>{" "}
-          tugas selesai
+      <div className="bg-neutral-50 rounded-lg p-4 border">
+        <p className="text-sm">
+          Selesai: <b>{completedCount}</b> / {tasks.length}
         </p>
+
         <div className="mt-2 w-full bg-neutral-200 rounded-full h-2">
           <div
-            className="h-2 rounded-full transition-all"
+            className="h-2 rounded-full"
             style={{
               width: `${progressPercent}%`,
-              background: `linear-gradient(to right, #eab308, #ef4444)`,
+              background: "linear-gradient(to right,#22c55e,#16a34a)",
             }}
           />
         </div>
       </div>
 
-      {/* Form */}
       <TodoForm onAdd={addTask} />
 
-      {/* Task List */}
-      <TodoList tasks={tasks} onToggle={toggleTask} onDelete={deleteTask} onClearAll={clearAll} />
+      <TodoList
+        tasks={tasks.map(t => ({
+          id: t.id,
+          text: t.task,        // <- ini dia penyebabnya
+          completed: t.completed
+        }))}
+        onToggle={(id, c) => toggleTask(id, c)}
+        onDelete={deleteTask}
+        onClearAll={clearAll}
+      />
     </div>
   )
 }
