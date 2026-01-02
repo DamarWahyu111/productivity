@@ -1,4 +1,5 @@
 "use client"
+
 import MenuCard from "./MenuCard"
 
 export default function Dashboard({ onNavigate }) {
