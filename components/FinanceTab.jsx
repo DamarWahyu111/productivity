@@ -100,7 +100,7 @@ export default function FinanceTab({ type }) {
   const loadData = async () => {
     if (!user) return
 
-    await autoResetSalary()
+    autoResetSalary()
 
     const { data: all } = await supabase
       .from("finance_transactions")
