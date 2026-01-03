@@ -16,6 +16,29 @@ export default function FinanceTab({ type }) {
   const [displayDate, setDisplayDate] = useState("")
   const [weekDays, setWeekDays] = useState([])
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [animatedBalance, setAnimatedBalance] = useState(0)
+
+  useEffect(() => {
+    let start = 0
+    const end = globalBalance
+    if (end === 0) return setAnimatedBalance(0)
+
+    const duration = 2000 // ms
+    const increment = end / (duration / 26) 
+
+    const animate = () => {
+      start += increment
+      if ((increment > 0 && start >= end) || (increment < 0 && start <= end)) {
+        setAnimatedBalance(end)
+        return
+      }
+      setAnimatedBalance(Math.floor(start))
+      requestAnimationFrame(animate)
+    }
+
+    animate()
+  }, [globalBalance])
+
 
   const categoryList = [
   "all",
@@ -57,7 +80,6 @@ export default function FinanceTab({ type }) {
 
   const currentBalance = totalIncome - totalExpense;
 
-  // kalau sudah 0 ya tidak usah apa-apa
   if (currentBalance !== 0) {
     await supabase.from("finance_transactions").insert({
       user_id: user.id,
@@ -70,7 +92,6 @@ export default function FinanceTab({ type }) {
     });
   }
 
-  // tandai bulan ini sudah di-reset
   await supabase.from("user_month_reset").insert({
     user_id: user.id,
     month_year: monthKey,
@@ -320,7 +341,7 @@ export default function FinanceTab({ type }) {
         <div className="bg-neutral-100 p-4 rounded-xl">
           <p>Saldo</p>
           <p className="text-2xl font-bold">
-            Rp {globalBalance.toLocaleString("id-ID")}
+            Rp {animatedBalance.toLocaleString("id-ID")}
           </p>
         </div>
 
