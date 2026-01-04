@@ -148,10 +148,16 @@ export default function FinanceTab({ type }) {
       .eq("user_id", user.id)
       .order("date", { ascending: false })
 
-    // daily → hanya daily
-    if (type === "daily") query = query.eq("scope", "daily")
+    // daily
+    if (type === "daily") {
+      const today = new Date().toISOString().split("T")[0]  // yyyy-mm-dd
+      query = query
+        .eq("scope", "daily")
+        .gte("date", `${today}T00:00:00`)
+        .lte("date", `${today}T23:59:59`)
+    }
 
-    // weekly → hanya weekly
+    // weekly
     if (type === "weekly") query = query.eq("scope", "weekly")
 
     const { data: scoped } = await query
