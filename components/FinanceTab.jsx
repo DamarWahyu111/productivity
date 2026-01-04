@@ -17,6 +17,10 @@ export default function FinanceTab({ type }) {
   const [weekDays, setWeekDays] = useState([])
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [animatedBalance, setAnimatedBalance] = useState(0)
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  )
+
 
   useEffect(() => {
     let start = 0
@@ -150,11 +154,10 @@ export default function FinanceTab({ type }) {
 
     // daily
     if (type === "daily") {
-      const today = new Date().toISOString().split("T")[0]  // yyyy-mm-dd
       query = query
         .eq("scope", "daily")
-        .gte("date", `${today}T00:00:00`)
-        .lte("date", `${today}T23:59:59`)
+        .gte("date", `${selectedDate}T00:00:00`)
+        .lte("date", `${selectedDate}T23:59:59`)
     }
 
     // weekly
@@ -375,6 +378,25 @@ export default function FinanceTab({ type }) {
           </div>
         </div>
       )}
+
+      {type === "daily" && (
+        <div className="bg-neutral-50 p-3 rounded-xl border">
+          <label className="text-sm font-medium text-neutral-600">
+            Pilih tanggal
+          </label>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => {
+              setSelectedDate(e.target.value)
+              loadData()
+            }}
+            className="mt-1 px-3 py-2 border rounded-lg"
+          />
+        </div>
+      )}
+
 
       <FinanceForm onAdd={addTransaction} />
       <FinanceChart
