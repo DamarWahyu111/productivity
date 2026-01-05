@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
-import { LoginForm } from "@/components/auth/login-form"
-import { RegisterForm } from "@/components/auth/register-form"
+import { LoginForm } from "@/app/auth/login-form"
+import { RegisterForm } from "@/app/auth/register-form"
 
 export default function AuthPage() {
   const { user, isLoading } = useAuth()

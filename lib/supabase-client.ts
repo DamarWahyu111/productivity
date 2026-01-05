@@ -9,4 +9,12 @@ if (!supabaseUrl || !supabaseKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true, // 🔥 Keep session in localStorage
+    autoRefreshToken: true, // 🔥 Auto refresh token before expiry
+    detectSessionInUrl: true, // Detect session from URL (for email verification & password reset)
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase.auth.token',
+  }
+})

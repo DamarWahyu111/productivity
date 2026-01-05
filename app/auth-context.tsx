@@ -17,6 +17,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
+  updatePassword: (newPassword: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -41,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
         }
       } catch (error) {
-        console.error("[v0] Error checking session:", error)
+        console.error("Error checking session:", error)
       } finally {
         setIsLoading(false)
       }
@@ -52,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      console.log("Auth event:", event)
+      
       if (session?.user) {
         setUser({
           id: session.user.id,
@@ -61,12 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null)
       }
+
+      // Handle password recovery
+      if (event === 'PASSWORD_RECOVERY') {
+        // Redirect to password reset page if needed
+        router.push('/auth/reset-password')
+      }
     })
 
     return () => {
       subscription?.unsubscribe()
     }
-  }, [])
+  }, [router])
 
   const login = async (email: string, password: string) => {
     try {
@@ -108,14 +118,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
+      
       setUser(null)
+      
+      // Clear "Remember Me" data on logout
+      localStorage.removeItem("rememberedEmail")
+      localStorage.removeItem("rememberMe")
+      
       router.push("/auth")
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : "Logout failed")
     }
   }
 
-  return <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>{children}</AuthContext.Provider>
+  // Reset Password - Send email with reset link
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+
+      if (error) throw error
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Password reset failed")
+    }
+  }
+
+  // Update Password - After clicking reset link
+  const updatePassword = async (newPassword: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      })
+
+      if (error) throw error
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Password update failed")
+    }
+  }
+
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        isLoading, 
+        login, 
+        register, 
+        logout, 
+        resetPassword, 
+        updatePassword 
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
