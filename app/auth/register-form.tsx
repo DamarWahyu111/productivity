@@ -168,7 +168,7 @@ export function RegisterForm({ onSwitchMode }: RegisterFormProps) {
 
       <Button
         type="submit"
-        className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold py-2"
+        className="w-full bg-neutral-800 hover:bg-neutral-900 text-primary-foreground font-semibold py-2"
         disabled={loading}
       >
         {loading ? (

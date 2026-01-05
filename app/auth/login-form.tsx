@@ -206,18 +206,18 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
           />
           <span className="text-muted-foreground">Ingat saya</span>
         </label>
-        <button 
+        {/* <button 
           type="button" 
           onClick={() => setShowForgotPassword(true)}
           className="text-primary hover:text-accent transition-colors"
         >
           Lupa password?
-        </button>
+        </button> */}
       </div>
 
       <Button
         type="submit"
-        className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold py-2"
+        className="w-full bg-neutral-800 hover:bg-neutral-900 text-primary-foreground font-semibold py-2"
         disabled={loading}
       >
         {loading ? (
