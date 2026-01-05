@@ -1,15 +1,21 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 
 export default function BackButton({ onClick }) {
   const router = useRouter()
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const handleBack = () => {
     if (onClick) {
       onClick()
     } else {
-      if (window.history.length > 1) {
+      if (isMounted && window.history.length > 1) {
         router.back()
       } else {
         router.push("/dashboard")

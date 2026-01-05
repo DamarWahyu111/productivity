@@ -20,7 +20,49 @@ export default function FinanceTab({ type }) {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   )
+  const [weekOffset, setWeekOffset] = useState(0)
+  
+  // State untuk week range picker
+  const [showWeekPicker, setShowWeekPicker] = useState(false)
+  const [customWeekStart, setCustomWeekStart] = useState("")
+  const [customWeekEnd, setCustomWeekEnd] = useState("")
 
+  // ============================
+  // HELPER: GET JAKARTA TIME
+  // ============================
+  const getJakartaTime = () => {
+    const jakartaTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+    return new Date(jakartaTime)
+  }
+
+  const getWeekRange = () => {
+    const today = new Date()
+    today.setDate(today.getDate() + weekOffset * 7)
+
+    const start = new Date(today)
+    start.setDate(today.getDate() - today.getDay())
+
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+
+    return { start, end }
+  }
+
+  const generateWeekOptions = () => {
+    const options = []
+    for (let i = 0; i >= -52; i--) {
+      options.push(i)
+    }
+    return options
+  }
+
+  const weekOptions = generateWeekOptions()
+
+  const getWeekLabel = (offset) => {
+    if (offset === 0) return "Minggu ini"
+    if (offset > 0) return `Minggu +${offset}`
+    return `Minggu ${offset}`
+  }
 
   useEffect(() => {
     let start = 0
@@ -43,81 +85,61 @@ export default function FinanceTab({ type }) {
     animate()
   }, [globalBalance])
 
-
   const categoryList = [
-  "all",
-  ...new Set(transactions.map(t => t.category).filter(Boolean))
-]
+    "all",
+    ...new Set(transactions.map(t => t.category).filter(Boolean))
+  ]
 
   const autoResetSalary = async () => {
-  if (!user) return;
+    if (!user) return;
 
-  const now = new Date();
-  const todayIsFirst = now.getDate() === 28;
-  const monthKey = `${now.getFullYear()}-${now.getMonth() + 28}`;
+    const now = getJakartaTime(); 
+    const todayIsFirst = now.getDate() === 28;
+    const monthKey = `${now.getFullYear()}-${now.getMonth() + 28}`;
 
-  if (!todayIsFirst) return;
+    if (!todayIsFirst) return;
 
-  // cek apakah sudah reset bulan ini
-  const { data: already } = await supabase
-    .from("user_month_reset")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("month_year", monthKey)
-    .maybeSingle();
+    const { data: already } = await supabase
+      .from("user_month_reset")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("month_year", monthKey)
+      .maybeSingle();
 
-  if (already) return; // sudah reset → stop
+    if (already) return; 
 
-  // ambil semua transaksi user
-  const { data: all } = await supabase
-    .from("finance_transactions")
-    .select("*")
-    .eq("user_id", user.id);
+    const { data: all } = await supabase
+      .from("finance_transactions")
+      .select("*")
+      .eq("user_id", user.id);
 
-  const totalIncome = all
-    .filter(t => t.type === "income")
-    .reduce((s, t) => s + Number(t.amount), 0);
+    const totalIncome = all
+      .filter(t => t.type === "income")
+      .reduce((s, t) => s + Number(t.amount), 0);
 
-  const totalExpense = all
-    .filter(t => t.type === "expense")
-    .reduce((s, t) => s + Number(t.amount), 0);
+    const totalExpense = all
+      .filter(t => t.type === "expense")
+      .reduce((s, t) => s + Number(t.amount), 0);
 
-  const currentBalance = totalIncome - totalExpense;
+    const currentBalance = totalIncome - totalExpense;
 
-  if (currentBalance !== 0) {
-    await supabase.from("finance_transactions").insert({
+    if (currentBalance !== 0) {
+      await supabase.from("finance_transactions").insert({
+        user_id: user.id,
+        scope: "monthly",
+        type: currentBalance > 0 ? "expense" : "income",
+        amount: Math.abs(currentBalance),
+        category: "auto-reset",
+        note: "Reset otomatis tanggal 28",
+        date: getJakartaTime().toISOString(), 
+      });
+    }
+
+    await supabase.from("user_month_reset").insert({
       user_id: user.id,
-      scope: "monthly",
-      type: currentBalance > 0 ? "expense" : "income",
-      amount: Math.abs(currentBalance),
-      category: "auto-reset",
-      note: "Reset otomatis tanggal 28",
-      date: new Date().toISOString(),
+      month_year: monthKey,
     });
   }
-
-  await supabase.from("user_month_reset").insert({
-    user_id: user.id,
-    month_year: monthKey,
-  });
-};
-
-{/* FILTER KATEGORI */}
-<div className="flex gap-2 items-center">
-  <p className="text-sm font-medium">Filter kategori:</p>
-
-  <select
-    value={selectedCategory}
-    onChange={e => setSelectedCategory(e.target.value)}
-    className="border rounded-lg px-3 py-2"
-  >
-    {categoryList.map(c => (
-      <option key={c} value={c}>
-        {c === "all" ? "Semua" : c}
-      </option>
-    ))}
-  </select>
-</div>
 
   // ============================
   // LOAD & HITUNG SALDO GLOBAL
@@ -144,8 +166,6 @@ export default function FinanceTab({ type }) {
       setGlobalBalance(income - expense)
     }
 
-    // FILTER SESUAI TAB
-
     let query = supabase
       .from("finance_transactions")
       .select("*")
@@ -161,30 +181,50 @@ export default function FinanceTab({ type }) {
     }
 
     // weekly
-    if (type === "weekly") query = query.eq("scope", "weekly")
+    if (type === "weekly") {
+      const { start, end } = getWeekRange()
+
+      query = query
+        .eq("scope", "weekly")
+        .gte("date", start.toISOString())
+        .lte("date", end.toISOString())
+    }
 
     const { data: scoped } = await query
     if (scoped) setTransactions(scoped)
   }
 
-
   // ========================= CHART DATA =========================
   const buildChartData = () => {
-
-    // DAILY → per jam
+    // DAILY → per jam (grouping per jam)
     if (type === "daily") {
-      const today = new Date().toDateString()
+      const hourlyData = {}
 
-      return transactions
-        .filter(t => new Date(t.date).toDateString() === today)
-        .map(t => ({
-          label: new Date(t.date).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          income: t.type === "income" ? Number(t.amount) : 0,
-          expense: t.type === "expense" ? Number(t.amount) : 0,
+      transactions.forEach(t => {
+        const jakartaDate = new Date(t.date).toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+        const hour = new Date(jakartaDate).getHours()
+        const hourLabel = `${hour.toString().padStart(2, '0')}:00`
+        
+        if (!hourlyData[hourLabel]) {
+          hourlyData[hourLabel] = { income: 0, expense: 0 }
+        }
+
+        if (t.type === "income") {
+          hourlyData[hourLabel].income += Number(t.amount)
+        } else {
+          hourlyData[hourLabel].expense += Number(t.amount)
+        }
+      })
+
+      return Object.keys(hourlyData)
+        .sort()
+        .map(hour => ({
+          label: hour,
+          income: hourlyData[hour].income,
+          expense: hourlyData[hour].expense,
         }))
     }
 
-    // WEEKLY
     if (type === "weekly") {
       return weekDays.map(day => {
         const list = transactions.filter(t => t.date.startsWith(day.iso))
@@ -197,8 +237,8 @@ export default function FinanceTab({ type }) {
       })
     }
 
-    // MONTHLY
-    const now = new Date()
+    // MONTHLY → per tanggal dalam sebulan
+    const now = getJakartaTime()
     const year = now.getFullYear()
     const month = now.getMonth()
     const days = new Date(year, month + 1, 0).getDate()
@@ -217,17 +257,18 @@ export default function FinanceTab({ type }) {
 
   const chartData = buildChartData()
 
-
   useEffect(() => {
     loadData()
     updateHeaderDate()
     if (type === "weekly") buildWeek()
-  }, [type])
+  }, [type, weekOffset, selectedDate])
 
   // ==========================
   // TAMBAH TRANSAKSI BIASA
   // ==========================
   const addTransaction = async data => {
+    const jakartaDate = getJakartaTime() 
+
     await supabase.from("finance_transactions").insert({
       user_id: user.id,
       scope: type, 
@@ -235,7 +276,7 @@ export default function FinanceTab({ type }) {
       amount: Number(data.amount),
       category: data.category,
       note: data.description,
-      date: new Date().toISOString(),
+      date: jakartaDate.toISOString(),
     })
 
     await loadData()
@@ -247,6 +288,8 @@ export default function FinanceTab({ type }) {
   const addSalary = async () => {
     if (!salaryInput || Number(salaryInput) <= 0) return
 
+    const jakartaDate = getJakartaTime() 
+
     await supabase.from("finance_transactions").insert({
       user_id: user.id,
       scope: "monthly",
@@ -254,7 +297,7 @@ export default function FinanceTab({ type }) {
       amount: Number(salaryInput),
       category: "salary",
       note: "Gaji Bulanan",
-      date: new Date().toISOString(),
+      date: jakartaDate.toISOString(), 
     })
 
     setSalaryInput("")
@@ -273,7 +316,7 @@ export default function FinanceTab({ type }) {
   // HEADER TANGGAL UI
   // ==========================
   const updateHeaderDate = () => {
-    const d = new Date()
+    const d = getJakartaTime() 
 
     if (type === "daily") {
       setDisplayDate(
@@ -285,13 +328,10 @@ export default function FinanceTab({ type }) {
         }),
       )
     } else if (type === "weekly") {
-      const start = new Date(d)
-      start.setDate(d.getDate() - d.getDay())
-      const end = new Date(start)
-      end.setDate(start.getDate() + 6)
+      const { start, end } = getWeekRange()
 
       setDisplayDate(
-        `${start.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} - ${end.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`,
+        `${start.toLocaleDateString("id-ID", { day:"numeric", month:"short"})} - ${end.toLocaleDateString("id-ID", { day:"numeric", month:"short", year:"numeric"})}`
       )
     } else {
       setDisplayDate(
@@ -304,20 +344,105 @@ export default function FinanceTab({ type }) {
   }
 
   const buildWeek = () => {
-    const today = new Date()
-    const weekStart = new Date(today)
-    weekStart.setDate(today.getDate() - today.getDay())
+    const { start } = getWeekRange()
 
     const days = []
+
     for (let i = 0; i < 7; i++) {
-      const x = new Date(weekStart)
-      x.setDate(weekStart.getDate() + i)
+      const x = new Date(start)
+      x.setDate(start.getDate() + i)
+
       days.push({
-        label: x.toLocaleDateString("id-ID", { weekday: "short" }),
-        num: x.getDate(),
+        day: x.toLocaleDateString("id-ID", { weekday: "short" }),
+        iso: x.toISOString().split("T")[0],
       })
     }
     setWeekDays(days)
+  }
+
+  // ==========================
+  // CUSTOM WEEK RANGE PICKER
+  // ==========================
+  const applyCustomWeekRange = () => {
+    if (!customWeekStart || !customWeekEnd) return
+
+    const start = new Date(customWeekStart)
+    const end = new Date(customWeekEnd)
+    
+    const today = new Date()
+    const diffTime = start - today
+    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7))
+    
+    setWeekOffset(diffWeeks)
+    setShowWeekPicker(false)
+  }
+
+  // ==========================
+  // FILTER CHART DATA BY CATEGORY
+  // ==========================
+  const getFilteredChartData = () => {
+    if (selectedCategory === "all") return chartData
+
+    const filteredTransactions = transactions.filter(t => t.category === selectedCategory)
+
+    // DAILY
+    if (type === "daily") {
+      const hourlyData = {}
+
+      filteredTransactions.forEach(t => {
+        const jakartaDate = new Date(t.date).toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+        const hour = new Date(jakartaDate).getHours()
+        const hourLabel = `${hour.toString().padStart(2, '0')}:00`
+        
+        if (!hourlyData[hourLabel]) {
+          hourlyData[hourLabel] = { income: 0, expense: 0 }
+        }
+
+        if (t.type === "income") {
+          hourlyData[hourLabel].income += Number(t.amount)
+        } else {
+          hourlyData[hourLabel].expense += Number(t.amount)
+        }
+      })
+
+      return Object.keys(hourlyData)
+        .sort()
+        .map(hour => ({
+          label: hour,
+          income: hourlyData[hour].income,
+          expense: hourlyData[hour].expense,
+        }))
+    }
+
+    // WEEKLY
+    if (type === "weekly") {
+      return weekDays.map(day => {
+        const list = filteredTransactions.filter(t => t.date.startsWith(day.iso))
+
+        return {
+          label: day.day,
+          income: list.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
+          expense: list.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+        }
+      })
+    }
+
+    // MONTHLY
+    const now = getJakartaTime()
+    const year = now.getFullYear()
+    const month = now.getMonth()
+    const days = new Date(year, month + 1, 0).getDate()
+
+    return Array.from({ length: days }, (_, i) => {
+      const iso = new Date(year, month, i + 1).toISOString().split("T")[0]
+      const list = filteredTransactions.filter(t => t.date.startsWith(iso))
+
+      return {
+        label: i + 1,
+        income: list.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
+        expense: list.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+      }
+    })
   }
 
   // ==========================
@@ -330,6 +455,115 @@ export default function FinanceTab({ type }) {
     <div className="space-y-6">
 
       <p className="text-sm font-semibold text-neutral-600">{displayDate}</p>
+
+      {type === "weekly" && (
+        <div className="space-y-3">
+          <div className="flex gap-3 items-center flex-wrap">
+
+            <button
+              disabled={weekOffset >= 0}
+              onClick={() => setWeekOffset(prev => prev + 1)}
+              className={`px-3 py-2 border rounded-lg transition-all ${
+                weekOffset >= 0 
+                  ? "opacity-40 cursor-not-allowed bg-neutral-100" 
+                  : "hover:bg-neutral-50"
+              }`}
+            >
+              Minggu depan →
+            </button>
+
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="px-3 py-2 border rounded-lg hover:bg-neutral-50"
+            >
+              Minggu ini
+            </button>
+
+            <button
+              onClick={() => setWeekOffset(prev => prev - 1)}
+              className="px-3 py-2 border rounded-lg hover:bg-neutral-50"
+            >
+              ← Minggu lalu
+            </button>
+
+            <select
+              value={weekOffset}
+              onChange={e => setWeekOffset(Number(e.target.value))}
+              className="border rounded-lg px-3 py-2 bg-white hover:bg-neutral-50 cursor-pointer"
+            >
+              {weekOptions.map(i => (
+                <option key={i} value={i}>
+                  {getWeekLabel(i)}
+                </option>
+              ))}
+            </select>
+
+            {/* Tombol buka Week Range Picker */}
+            <button
+              onClick={() => setShowWeekPicker(!showWeekPicker)}
+              className="px-3 py-2 border rounded-lg hover:bg-neutral-50 bg-blue-50 border-blue-200"
+            >
+              📅 Pilih Range Minggu
+            </button>
+
+          </div>
+
+          {/* WEEK RANGE PICKER */}
+          {showWeekPicker && (
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl space-y-3">
+              <p className="font-semibold text-sm text-blue-900">Pilih Range Minggu Custom</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-neutral-600 block mb-1">
+                    Tanggal Mulai (Minggu)
+                  </label>
+                  <input
+                    type="date"
+                    value={customWeekStart}
+                    onChange={e => setCustomWeekStart(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-neutral-600 block mb-1">
+                    Tanggal Akhir (Sabtu)
+                  </label>
+                  <input
+                    type="date"
+                    value={customWeekEnd}
+                    onChange={e => setCustomWeekEnd(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={applyCustomWeekRange}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Terapkan
+                </button>
+                <button
+                  onClick={() => setShowWeekPicker(false)}
+                  className="px-4 py-2 border rounded-lg hover:bg-neutral-50"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Display info minggu yang dipilih */}
+          <div className="text-xs text-neutral-500 bg-neutral-50 px-3 py-2 rounded-lg inline-block">
+            {weekOffset === 0 && "📍 Menampilkan minggu ini"}
+            {weekOffset > 0 && `📍 Menampilkan ${weekOffset} minggu ke depan`}
+            {weekOffset < 0 && `📍 Menampilkan ${Math.abs(weekOffset)} minggu yang lalu`}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
@@ -390,25 +624,33 @@ export default function FinanceTab({ type }) {
             value={selectedDate}
             onChange={e => {
               setSelectedDate(e.target.value)
-              loadData()
             }}
-            className="mt-1 px-3 py-2 border rounded-lg"
+            className="mt-1 px-3 py-2 border rounded-lg w-full sm:w-auto"
           />
         </div>
       )}
 
+      {/* FILTER KATEGORI */}
+      <div className="flex gap-2 items-center">
+        <p className="text-sm font-medium">Filter kategori:</p>
+
+        <select
+          value={selectedCategory}
+          onChange={e => setSelectedCategory(e.target.value)}
+          className="border rounded-lg px-3 py-2"
+        >
+          {categoryList.map(c => (
+            <option key={c} value={c}>
+              {c === "all" ? "Semua" : c}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <FinanceForm onAdd={addTransaction} />
+      
       <FinanceChart
-        data={chartData.filter(
-          d =>
-            selectedCategory === "all" ||
-            transactions.some(
-              t =>
-                t.category === selectedCategory &&
-                ('' + new Date(t.date).getDate()) === ('' + d.label)
-            )
-        )}
+        data={selectedCategory === "all" ? chartData : getFilteredChartData()}
         type={type}
       />
 
