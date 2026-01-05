@@ -148,13 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: {
             name,
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
       if (error) throw error
 
-      // Auto login after registration
-      router.push("/dashboard")
+      // Don't auto-redirect, show message to check email instead
+      // User will be redirected after email confirmation
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : "Registration failed")
     }
@@ -178,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("rememberedEmail")
       localStorage.removeItem("rememberMe")
       
+      // Clear any potentially corrupted session data
       const keysToRemove = []
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
@@ -187,14 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key))
       
+      // Redirect to auth page
       router.push("/auth")
     } catch (error) {
       console.error("Unexpected logout error:", error)
       
+      // Force logout anyway by clearing everything
       setUser(null)
       localStorage.removeItem("rememberedEmail")
       localStorage.removeItem("rememberMe")
       
+      // Clear all supabase auth keys
       const keysToRemove = []
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
