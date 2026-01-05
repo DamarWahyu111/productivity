@@ -30,23 +30,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
+    let mounted = true
+    
     const checkSession = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        // Add retry logic for initial session check
+        let retries = 3
+        let lastError = null
+        
+        while (retries > 0) {
+          try {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession()
 
-        if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || "",
-            name: session.user.user_metadata?.name,
-          })
+            if (!mounted) return
+
+            if (session?.user) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || "",
+                name: session.user.user_metadata?.name,
+              })
+            }
+            
+            // Success - break the retry loop
+            break
+          } catch (err) {
+            lastError = err
+            retries--
+            
+            if (retries > 0) {
+              // Wait before retry
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+          }
+        }
+        
+        if (retries === 0 && lastError) {
+          console.error("Failed to check session after retries:", lastError)
+          // Clear potentially corrupted session data
+          localStorage.removeItem('supabase.auth.token')
         }
       } catch (error) {
         console.error("Error checking session:", error)
       } finally {
-        setIsLoading(false)
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -55,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      if (!mounted) return
+      
       console.log("Auth event:", event)
       
       if (session?.user) {
@@ -69,27 +102,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Handle password recovery
       if (event === 'PASSWORD_RECOVERY') {
-        // Redirect to password reset page if needed
         router.push('/auth/reset-password')
       }
     })
 
     return () => {
+      mounted = false
       subscription?.unsubscribe()
     }
   }, [router])
 
   const login = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      // Clear any existing sessions first
+      await supabase.auth.signOut()
+      
+      // Small delay to ensure clean state
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) throw error
+      
+      // Verify session was created
+      if (!data.session) {
+        throw new Error("Failed to create session")
+      }
 
       router.push("/dashboard")
     } catch (error) {
+      console.error("Login error:", error)
       throw new Error(error instanceof Error ? error.message : "Login failed")
     }
   }
@@ -161,26 +206,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Reset Password Direct - User verifies via email first
   const resetPasswordDirect = async (email: string, newPassword: string) => {
     try {
-      // Step 1: Send magic link to email for verification
-      const { error: sendError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false, // Don't create new user
-        }
-      })
-      
-      if (sendError) throw sendError
-      
-      // In production, user clicks link from email, then we update password
-      // For now, we'll use a workaround with password reset flow
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth?reset=true`,
       })
       
       if (resetError) throw resetError
       
-      // Store new password temporarily (NOT RECOMMENDED for production)
-      // Better to redirect to reset page after email verification
+      // Store new password temporarily
       sessionStorage.setItem('pendingPasswordReset', JSON.stringify({ email, newPassword }))
       
     } catch (error) {

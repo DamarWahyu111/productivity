@@ -1,187 +1,235 @@
 "use client"
 
-import { useState } from "react"
-import { useAuth } from "@/app/auth-context"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { supabase } from "@/lib/supabase-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Lock, Loader2, Eye, EyeOff } from "lucide-react"
+import { Lock, Loader2, CheckCircle } from "lucide-react"
 
-export function ChangePassword() {
-  const [currentPassword, setCurrentPassword] = useState("")
+export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [showCurrent, setShowCurrent] = useState(false)
-  const [showNew, setShowNew] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [isValidToken, setIsValidToken] = useState(false)
+  const [checkingToken, setCheckingToken] = useState(true)
+  
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const { updatePassword, user } = useAuth()
+  useEffect(() => {
+    // Check if user came from email link (has recovery token)
+    const checkRecoveryToken = async () => {
+      try {
+        // Supabase automatically handles the token from URL
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error("Session error:", error)
+          setError("Link reset password tidak valid atau sudah kadaluarsa")
+          setIsValidToken(false)
+        } else if (session) {
+          setIsValidToken(true)
+        } else {
+          setError("Link reset password tidak valid atau sudah kadaluarsa")
+          setIsValidToken(false)
+        }
+      } catch (err) {
+        console.error("Token check error:", err)
+        setError("Terjadi kesalahan saat memverifikasi link")
+        setIsValidToken(false)
+      } finally {
+        setCheckingToken(false)
+      }
+    }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    checkRecoveryToken()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsValidToken(true)
+        setCheckingToken(false)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const handleSubmit = async () => {
     setError("")
-    setSuccess(false)
 
     // Validasi
-    if (newPassword.length < 6) {
-      setError("Password baru minimal 6 karakter")
+    if (!newPassword || !confirmPassword) {
+      setError("Semua field harus diisi")
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Password baru dan konfirmasi tidak cocok")
+      setError("Password tidak cocok")
       return
     }
 
-    if (newPassword === currentPassword) {
-      setError("Password baru tidak boleh sama dengan password lama")
+    if (newPassword.length < 6) {
+      setError("Password minimal 6 karakter")
       return
     }
 
     setLoading(true)
 
     try {
-      // Update password langsung tanpa email
-      await updatePassword(newPassword)
-      
-      setSuccess(true)
-      setCurrentPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
+      // Update password menggunakan session dari recovery token
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      })
 
-      // Auto hide success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000)
+      if (updateError) throw updateError
+
+      setSuccess(true)
+
+      // Redirect ke login setelah 3 detik
+      setTimeout(() => {
+        router.push("/auth")
+      }, 3000)
+
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Gagal mengubah password"
-      setError(errorMessage)
+      console.error("Reset password error:", err)
+      setError(err instanceof Error ? err.message : "Gagal reset password")
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <div className="bg-white rounded-xl shadow-md border border-neutral-200 p-6 max-w-2xl">
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
-          <Lock className="w-5 h-5" />
-          Ubah Password
-        </h3>
-        <p className="text-sm text-neutral-600 mt-1">
-          Pastikan password baru Anda kuat dan mudah diingat
-        </p>
+  // Loading state saat check token
+  if (checkingToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-blue-50">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+          <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-purple-600" />
+          <p className="text-neutral-600">Memverifikasi link reset password...</p>
+        </div>
       </div>
+    )
+  }
 
-      {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
-          <span className="text-lg">✅</span>
-          <span>Password berhasil diubah!</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
-          <span className="text-lg">❌</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Current Password */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-neutral-700">
-            Password Saat Ini
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
-            <Input
-              type={showCurrent ? "text" : "password"}
-              placeholder="Masukkan password saat ini"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              className="pl-10 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowCurrent(!showCurrent)}
-              className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600"
-            >
-              {showCurrent ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* New Password */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-neutral-700">
-            Password Baru
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
-            <Input
-              type={showNew ? "text" : "password"}
-              placeholder="Minimal 6 karakter"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              minLength={6}
-              className="pl-10 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowNew(!showNew)}
-              className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600"
-            >
-              {showNew ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-          </div>
-          {newPassword && (
-            <div className="flex items-center gap-2 text-xs">
-              <div className={`h-1 flex-1 rounded ${newPassword.length >= 6 ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className={newPassword.length >= 6 ? 'text-green-600' : 'text-red-600'}>
-                {newPassword.length >= 6 ? 'Kuat' : 'Lemah'}
-              </span>
+  // Success state
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-blue-50">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
-          )}
-        </div>
-
-        {/* Confirm Password */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-neutral-700">
-            Konfirmasi Password Baru
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
-            <Input
-              type={showConfirm ? "text" : "password"}
-              placeholder="Ulangi password baru"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={6}
-              className="pl-10 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirm(!showConfirm)}
-              className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600"
-            >
-              {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-          </div>
-          {confirmPassword && (
-            <p className={`text-xs ${newPassword === confirmPassword ? 'text-green-600' : 'text-red-600'}`}>
-              {newPassword === confirmPassword ? '✓ Password cocok' : '✗ Password tidak cocok'}
+            
+            <h2 className="text-2xl font-bold text-neutral-900">Password Berhasil Diubah!</h2>
+            
+            <p className="text-neutral-600">
+              Password Anda telah berhasil diperbarui. Anda akan diarahkan ke halaman login...
             </p>
-          )}
+
+            <div className="pt-4">
+              <Button
+                onClick={() => router.push("/auth")}
+                className="w-full bg-neutral-800 hover:bg-neutral-900 text-white font-semibold py-3"
+              >
+                Kembali ke Login
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Invalid token state
+  if (!isValidToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-blue-50">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <span className="text-4xl">❌</span>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-neutral-900">Link Tidak Valid</h2>
+            
+            <p className="text-neutral-600">
+              {error || "Link reset password tidak valid atau sudah kadaluarsa. Silakan minta link baru."}
+            </p>
+
+            <div className="pt-4">
+              <Button
+                onClick={() => router.push("/auth")}
+                className="w-full bg-neutral-800 hover:bg-neutral-900 text-white font-semibold py-3"
+              >
+                Kembali ke Login
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Reset password form
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-blue-50">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-neutral-900 mb-2">Reset Password</h2>
+          <p className="text-neutral-600 text-sm">
+            Masukkan password baru Anda
+          </p>
         </div>
 
-        <div className="flex gap-3 pt-4">
+        {error && (
+          <div className="p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm mb-4">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Password Baru
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">Minimal 6 karakter</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Konfirmasi Password Baru
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
           <Button
-            type="submit"
-            className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white font-semibold"
+            onClick={handleSubmit}
+            className="w-full bg-neutral-800 hover:bg-neutral-900 text-white font-semibold py-3 mt-6"
             disabled={loading}
           >
             {loading ? (
@@ -190,29 +238,10 @@ export function ChangePassword() {
                 Mengubah Password...
               </>
             ) : (
-              "Ubah Password"
+              "Reset Password"
             )}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setCurrentPassword("")
-              setNewPassword("")
-              setConfirmPassword("")
-              setError("")
-            }}
-            className="px-6"
-          >
-            Reset
-          </Button>
         </div>
-      </form>
-
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-800">
-          💡 <strong>Tips:</strong> Gunakan kombinasi huruf besar, huruf kecil, angka, dan simbol untuk password yang lebih aman.
-        </p>
       </div>
     </div>
   )
