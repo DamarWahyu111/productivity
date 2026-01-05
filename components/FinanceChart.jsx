@@ -13,7 +13,6 @@ import {
 
 export default function FinanceChart({ data, type }) {
 
-  // width dinamis (monthly lebih lebar)
   const getChartWidth = () => {
     if (type === "monthly") return Math.max(900, data.length * 35)
     if (type === "weekly") return 700
