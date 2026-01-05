@@ -162,18 +162,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      
+      // Clear local user state first
       setUser(null)
+      
+      // Attempt to sign out from Supabase
+      const { error } = await supabase.auth.signOut()
+      
+      // Only throw error if it's not about missing session
+      if (error && !error.message.includes('session')) {
+        console.error("Logout error:", error)
+        // Continue anyway - don't throw
+      }
       
       // Clear "Remember Me" data on logout
       localStorage.removeItem("rememberedEmail")
       localStorage.removeItem("rememberMe")
       
+      const keysToRemove = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('supabase.auth')) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+      
       router.push("/auth")
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : "Logout failed")
+      console.error("Unexpected logout error:", error)
+      
+      setUser(null)
+      localStorage.removeItem("rememberedEmail")
+      localStorage.removeItem("rememberMe")
+      
+      const keysToRemove = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('supabase.auth')) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+      
+      // Still redirect
+      router.push("/auth")
     }
   }
 
