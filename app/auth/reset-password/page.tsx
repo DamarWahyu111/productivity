@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Lock, Loader2, CheckCircle } from "lucide-react"
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -17,7 +17,6 @@ export default function ResetPasswordPage() {
   const [checkingToken, setCheckingToken] = useState(true)
   
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   useEffect(() => {
     // Check if user came from email link (has recovery token)
@@ -244,5 +243,21 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrapper dengan Suspense
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-blue-50">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+          <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-purple-600" />
+          <p className="text-neutral-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }
