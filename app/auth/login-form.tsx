@@ -41,12 +41,10 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
     try {
       await login(email, password)
       
-      // Save email and preference if "Remember Me" is checked
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", email)
         localStorage.setItem("rememberMe", "true")
       } else {
-        // Clear saved data if unchecked
         localStorage.removeItem("rememberedEmail")
         localStorage.removeItem("rememberMe")
       }
@@ -56,7 +54,6 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
       let errorMessage = "Email atau password salah"
       
       if (err instanceof Error) {
-        // Handle specific error types
         if (err.message.includes("fetch") || err.message.includes("Failed to fetch")) {
           errorMessage = "Gagal terhubung ke server. Periksa koneksi internet Anda dan coba lagi."
         } else if (err.message.includes("Invalid login credentials")) {
