@@ -29,55 +29,8 @@ export default function FinanceTab({ type }) {
 // HELPER: GET JAKARTA TIME (FIXED VERSION)
 // ============================
 
-// FUNGSI 1: Untuk menyimpan ke database (returns ISO string in UTC)
   const getJakartaTime = () => {
-    const jakartaString = new Date().toLocaleString("en-US", {
-      timeZone: "Asia/Jakarta",
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
-    
-    return new Date(jakartaString)
-  }
-
-  // Untuk menyimpan ke database (returns ISO string)
-  const getJakartaTimeISO = () => {
-    const now = new Date()
-    
-    const jakartaString = now.toLocaleString("en-US", {
-      timeZone: "Asia/Jakarta",
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
-    
-    const [datePart, timePart] = jakartaString.split(', ')
-    const [month, day, year] = datePart.split('/')
-    
-    // Format: YYYY-MM-DDTHH:mm:ss.000Z
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}.000Z`
-  }
-
-  // Untuk mendapatkan tanggal Jakarta saja (YYYY-MM-DD)
-  const getJakartaDate = () => {
-    const jakartaTime = new Date().toLocaleString("en-US", { 
-      timeZone: "Asia/Jakarta",
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour12: false
-    })
-    const [month, day, year] = jakartaTime.split(', ')[0].split('/')
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    return new Date() 
   }
 
   const getWeekRange = () => {
