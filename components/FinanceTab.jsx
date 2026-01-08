@@ -22,7 +22,6 @@ export default function FinanceTab({ type }) {
   )
   const [weekOffset, setWeekOffset] = useState(0)
   
-  // State untuk week range picker
   const [showWeekPicker, setShowWeekPicker] = useState(false)
   const [customWeekStart, setCustomWeekStart] = useState("")
   const [customWeekEnd, setCustomWeekEnd] = useState("")
@@ -31,9 +30,8 @@ export default function FinanceTab({ type }) {
 // ============================
 
 // FUNGSI 1: Untuk menyimpan ke database (returns ISO string in UTC)
-  const getJakartaTimeISO = () => {
-    // Cara yang benar: buat Date object dari waktu Jakarta
-    const jakartaTime = new Date().toLocaleString("en-US", { 
+  const getJakartaTime = () => {
+    const jakartaString = new Date().toLocaleString("en-US", {
       timeZone: "Asia/Jakarta",
       year: 'numeric',
       month: '2-digit',
@@ -44,28 +42,13 @@ export default function FinanceTab({ type }) {
       hour12: false
     })
     
-    const [datePart, timePart] = jakartaTime.split(', ')
-    const [month, day, year] = datePart.split('/')
-    const [hour, minute, second] = timePart.split(':')
-    
-    const jakartaDate = new Date(Date.UTC(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      parseInt(hour) - 7, 
-      parseInt(minute),
-      parseInt(second)
-    ))
-    
-    return jakartaDate.toISOString()
+    return new Date(jakartaString)
   }
 
-  // ATAU gunakan cara yang lebih sederhana dan aman:
-  const getJakartaTimeISO_Alternative = () => {
-    // Ambil waktu sekarang
+  // Untuk menyimpan ke database (returns ISO string)
+  const getJakartaTimeISO = () => {
     const now = new Date()
     
-    // Convert ke Jakarta timezone string
     const jakartaString = now.toLocaleString("en-US", {
       timeZone: "Asia/Jakarta",
       year: 'numeric',
@@ -77,17 +60,14 @@ export default function FinanceTab({ type }) {
       hour12: false
     })
     
-    // Parse kembali sebagai UTC (karena kita ingin simpan waktu Jakarta as-is)
     const [datePart, timePart] = jakartaString.split(', ')
     const [month, day, year] = datePart.split('/')
     
-    // Format: YYYY-MM-DDTHH:mm:ss.sssZ
-    const isoString = `${year}-${month}-${day}T${timePart}.000Z`
-    
-    return isoString
+    // Format: YYYY-MM-DDTHH:mm:ss.000Z
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}.000Z`
   }
 
-  // FUNGSI 2: Untuk mendapatkan tanggal Jakarta saja (returns YYYY-MM-DD) - INI SUDAH BENAR
+  // Untuk mendapatkan tanggal Jakarta saja (YYYY-MM-DD)
   const getJakartaDate = () => {
     const jakartaTime = new Date().toLocaleString("en-US", { 
       timeZone: "Asia/Jakarta",
@@ -99,25 +79,6 @@ export default function FinanceTab({ type }) {
     const [month, day, year] = jakartaTime.split(', ')[0].split('/')
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
-
-  // FUNGSI 3: Helper untuk konversi UTC ke Jakarta time (untuk display)
-  const convertUTCtoJakarta = (utcDateString) => {
-    const date = new Date(utcDateString)
-    return date.toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta",
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }
-
-  // CONTOH PENGGUNAAN:
-  console.log("Sekarang di Jakarta:", getJakartaTimeISO())
-  console.log("Tanggal Jakarta:", getJakartaDate())
-
 
   const getWeekRange = () => {
     const today = new Date()
