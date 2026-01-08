@@ -30,7 +30,34 @@ export default function FinanceTab({ type }) {
 // ============================
 
   const getJakartaTime = () => {
-    return new Date() 
+    const jakartaString = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Jakarta",
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    
+    // Parse: "01/08/2026, 21:46:43"
+    const [datePart, timePart] = jakartaString.split(', ')
+    const [month, day, year] = datePart.split('/')
+    const [hour, minute, second] = timePart.split(':')
+    
+    // Buat Date object dengan EXPLICIT UTC time
+    // Kurangi 7 jam dari waktu Jakarta untuk dapat UTC
+    const utcDate = new Date(Date.UTC(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour) - 7, // Jakarta = UTC+7, jadi kurangi 7 jam
+      parseInt(minute),
+      parseInt(second)
+    ))
+    
+    return utcDate
   }
 
   const getWeekRange = () => {
